@@ -5,6 +5,7 @@ import path from 'path';
 const SCOPES = ['https://www.googleapis.com/auth/calendar'];
 const CREDENTIALS_PATH = path.join(process.cwd(), 'credentials.json');
 const TOKEN_PATH = path.join(process.cwd(), 'token.json');
+const calendarId = process.env.CALENDAR_ID;
 
 function getOAuthClient() {
   const credentials = JSON.parse(fs.readFileSync(CREDENTIALS_PATH, 'utf-8'));
@@ -50,9 +51,35 @@ export async function createCalendarEvent({
   };
 
   const response = await calendar.events.insert({
-    calendarId: 'd22cc475dffed1336b1576adf79b437d108ff7bbc52554c8b3b5cda65f6e6ed0@group.calendar.google.com',
+    calendarId: calendarId,
     requestBody: event,
   });
 
   return response.data;
+}
+
+export async function listUpcomingEvents(maxResults: number = 5) {
+  const auth = getOAuthClient();
+  const calendar = google.calendar({ version: 'v3', auth });
+
+  const response = await calendar.events.list({
+    calendarId: calendarId,
+    timeMin: new Date().toISOString(),
+    maxResults,
+    singleEvents: true,
+    orderBy: 'startTime',
+    timeZone: 'Europe/Brussels',
+  });
+
+  return response.data.items || [];
+}
+
+export async function deleteEvent(eventId: string) {
+  const auth = getOAuthClient();
+  const calendar = google.calendar({ version: 'v3', auth });
+
+  await calendar.events.delete({
+    calendarId: calendarId,
+    eventId,
+  });
 }

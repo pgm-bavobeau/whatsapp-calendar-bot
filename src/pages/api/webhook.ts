@@ -2,7 +2,7 @@ import type { NextApiRequest, NextApiResponse } from 'next';
 import { parseWhatsAppPayload } from '@/lib/parseWhatsAppMessage';
 import { sendWhatsAppTextMessage } from '@/services/whatsapp';
 import { generateReplyFromOpenAI } from '@/services/openai';
-import { createCalendarEvent } from '@/lib/google';
+import { createCalendarEvent, listUpcomingEvents, deleteEvent } from '@/lib/google';
 
 const VERIFY_TOKEN = process.env.WHATSAPP_VERIFY_TOKEN;
 
@@ -61,6 +61,18 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
         await sendWhatsAppTextMessage(cleanMessage.from, `${structured.reply} Bekijk details: ${event.htmlLink}`);
         return res.status(200).end();
+      } else if (structured.intent === 'cancel') {
+        const events = await listUpcomingEvents(5);
+
+        if (events.length === 0) {
+          await sendWhatsAppTextMessage(cleanMessage.from, "Er zijn geen aankomende afspraken om te annuleren.");
+          return res.status(200).end();
+        } else {
+          const event = events[0]; // Just cancel the first upcoming event for simplicity
+          await deleteEvent(event.id!);
+          await sendWhatsAppTextMessage(cleanMessage.from, `Afspraak geannuleerd: ${event.summary}`);
+          return res.status(200).end();
+        }
       } else {
         await sendWhatsAppTextMessage(cleanMessage.from, structured.reply);
         return res.status(200).end();
