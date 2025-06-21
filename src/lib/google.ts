@@ -83,3 +83,23 @@ export async function deleteEvent(eventId: string) {
     eventId,
   });
 }
+
+export async function updateEventTime(eventId: string, newStartDateTime: string, newEndDateTime: string) {
+  const auth = getOAuthClient();
+  const calendar = google.calendar({ version: 'v3', auth });
+
+  const response = await calendar.events.patch({
+    calendarId: calendarId,
+    eventId,
+    requestBody: {
+      start: {
+        dateTime: newStartDateTime,
+      },
+      end: {
+        dateTime: newEndDateTime,
+      },
+    },
+  });
+
+  return response.data;
+}
