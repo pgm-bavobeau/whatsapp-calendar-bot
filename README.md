@@ -1,7 +1,7 @@
 
 # 📅 WhatsApp Calendar Bot
 
-A chatbot that lets clients **book**, **reschedule**, and **cancel appointments** via WhatsApp. Appointments are synced with a **Google Calendar**, making this ideal for small businesses like therapists, clinics, or salons.
+A chatbot that lets clients **book**, **reschedule**, and **cancel appointments** via WhatsApp. Appointments are synced with a **Google Calendar**.
 
 **Stack:**
 - Next.js (App Router + TypeScript)
