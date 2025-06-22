@@ -1,10 +1,12 @@
 import type { NextApiRequest, NextApiResponse } from "next";
 import { parseWhatsAppPayload } from "@/lib/parseWhatsAppMessage";
+import { isEventAvailable, checkEventAvailability } from "@/lib/checkAvailability";
 import { sendWhatsAppTextMessage } from "@/services/whatsapp";
-import { generateReplyFromOpenAI } from "@/services/openai";
+import { generateReplyFromOpenAI, suggestAvailableTimes } from "@/services/openai";
 import {
   createCalendarEvent,
   listUpcomingEvents,
+  listBusyTimes,
   deleteEvent,
   updateEventTime,
 } from "@/services/google";
@@ -29,7 +31,6 @@ export default async function handler(
     }
   } else if (req.method === "POST") {
     const body = req.body;
-
     const changes = body?.entry?.[0]?.changes?.[0];
     const messageObj = changes?.value?.messages?.[0];
     const businessPhoneNumberId = changes?.value?.metadata?.phone_number_id;
@@ -49,7 +50,6 @@ export default async function handler(
     if (cleanMessage) {
       const aiRaw = await generateReplyFromOpenAI(cleanMessage.message);
 
-      console.log("🤖 AI response:", aiRaw);
       let structured;
       try {
         structured = JSON.parse(aiRaw);
@@ -64,41 +64,72 @@ export default async function handler(
 
       switch (structured.intent) {
         case "book":
+          console.log("📅 Booking appointment with structured data:", structured);
           if (structured.datetime) {
             const startDate = new Date(structured.datetime);
             if (isNaN(startDate.getTime())) {
               await sendWhatsAppTextMessage(
                 cleanMessage.from,
-                "Ongeldige datum/tijd. Probeer het opnieuw."
+                "Invalid date format. Please provide a valid date and time."
               );
               return res.status(200).end();
             }
             const endDate = new Date(startDate.getTime() + 30 * 60 * 1000); // 30 minutes later
+            
+            // Check if the date/time is available if not return 3 available times
+            const busyTimes = await listBusyTimes(startDate);
 
-            const event = await createCalendarEvent({
-              summary: structured.summary || "Afspraak via whatsapp",
-              phoneNumber: cleanMessage.from,
-              startDateTime: startDate.toISOString(),
-              endDateTime: endDate.toISOString(),
-            });
+            // look through the busy times to see if the requested time is available
+            let isAvailable = false;
+            if (!busyTimes || busyTimes.length === 0  ) {
+              console.log("No busy times found, assuming available");
+              isAvailable = true;
+            } else{
+              isAvailable = isEventAvailable(
+                busyTimes,
+                startDate,
+                endDate
+              );
+            };
+            
+            if (isAvailable) {
+                const event = await createCalendarEvent({
+                summary: structured.summary || "appointment via WhatsApp",
+                phoneNumber: cleanMessage.from,
+                startDateTime: startDate.toISOString(),
+                endDateTime: endDate.toISOString(),
+              });
 
-            await sendWhatsAppTextMessage(
-              cleanMessage.from,
-              `${structured.reply} Bekijk details: ${event.htmlLink}`
-            );
+              await sendWhatsAppTextMessage(
+                cleanMessage.from,
+                `${structured.reply} Details: ${event.htmlLink}`
+              )
+            } else {
+              // Send data to OpenAI to get 3 available times similar to the requested time
+              const suggestedTimes = await suggestAvailableTimes(
+                busyTimes,
+                { start: startDate.toISOString(), end: endDate.toISOString() }
+              );
+              
+              await sendWhatsAppTextMessage(
+                cleanMessage.from,
+                `The requested time is not available. Here are 3 alternative times you can book: ${suggestedTimes}. Please reply with one of these times to confirm your appointment or provide a new date and time.`
+              );
+              return res.status(200).end();
+            };
             return res.status(200).end();
           }
           // If no datetime, fall through to default reply
           await sendWhatsAppTextMessage(cleanMessage.from, structured.reply);
           return res.status(200).end();
 
-        case "cancel": {
+        case "cancel":
           const events = await listUpcomingEvents(5);
 
           if (events.length === 0) {
             await sendWhatsAppTextMessage(
               cleanMessage.from,
-              "Er zijn geen aankomende afspraken om te annuleren."
+              "There are no upcoming appointments to cancel."
             );
             return res.status(200).end();
           } else {
@@ -106,21 +137,21 @@ export default async function handler(
             await deleteEvent(event.id!);
             await sendWhatsAppTextMessage(
               cleanMessage.from,
-              `Afspraak geannuleerd: ${event.summary}`
+              `Appointment cancelled: ${event.summary}`
             );
             return res.status(200).end();
           }
-        }
 
-        case "reschedule": {
+        case "reschedule":
           if (structured.datetime) {
             const events = await listUpcomingEvents();
 
             if (events.length === 0) {
               await sendWhatsAppTextMessage(
                 cleanMessage.from,
-                "Er zijn geen aankomende afspraken om te verzetten."
+                "there are no upcoming appointments to reschedule."
               );
+              return res.status(200).end();
             } else {
               const event = events[0]; // Just reschedule the first upcoming event for simplicity
               const newStartDateTime = new Date(structured.datetime);
@@ -136,16 +167,21 @@ export default async function handler(
 
               await sendWhatsAppTextMessage(
                 cleanMessage.from,
-                `Afspraak verzet naar ${newStartDateTime.toLocaleString()}. Bekijk details: ${
+                `Appointment moved to ${newStartDateTime.toLocaleString()}. Details: ${
                   updatedEvent.htmlLink
                 }`
               );
               return res.status(200).end();
             }
           }
-        }
+
+        case "status":
+            // TODO: Implement status check logic 
+            break;
 
         default:
+          // For unknown intents, just send the AI reply  
+          // TODO: Implement more structured handling for unknown intents
           await sendWhatsAppTextMessage(cleanMessage.from, structured.reply);
           return res.status(200).end();
       }

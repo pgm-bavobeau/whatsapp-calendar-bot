@@ -1,11 +1,12 @@
-import { google } from "googleapis";
+import { google, calendar_v3 } from "googleapis";
 import fs from "fs";
 import path from "path";
+import FreeBusyCalendar = calendar_v3.Schema$FreeBusyCalendar;
 
 const SCOPES = ["https://www.googleapis.com/auth/calendar"];
 const CREDENTIALS_PATH = path.join(process.cwd(), "credentials.json");
 const TOKEN_PATH = path.join(process.cwd(), "token.json");
-const calendarId = process.env.CALENDAR_ID;
+const calendarId = process.env.CALENDAR_ID || "primary";
 
 function getOAuthClient() {
   const credentials = JSON.parse(fs.readFileSync(CREDENTIALS_PATH, "utf-8"));
@@ -57,6 +58,7 @@ export async function createCalendarEvent({
   return response.data;
 }
 
+// List upcoming events from the calendar
 export async function listUpcomingEvents(maxResults: number = 5) {
   const auth = getOAuthClient();
   const calendar = google.calendar({ version: "v3", auth });
@@ -72,6 +74,32 @@ export async function listUpcomingEvents(maxResults: number = 5) {
 
   return response.data.items || [];
 }
+
+// List time not available for a specific dates
+export async function listBusyTimes(startDate: Date, endDate?: Date): Promise<FreeBusyCalendar["busy"]> {
+  const auth = getOAuthClient();
+  const calendar = google.calendar({ version: "v3", auth });
+
+  startDate = new Date(startDate);
+  startDate.setHours(0, 0, 0, 0); 
+
+  if (!endDate) { 
+    endDate = new Date(startDate);
+    endDate.setDate(endDate.getDate() + 6); // Default to 1 week later
+  } 
+
+
+  const response = await calendar.freebusy.query({
+    requestBody: {
+      timeMin: startDate.toISOString(),
+      timeMax: endDate.toISOString(),
+      timeZone: "Europe/Brussels", 
+      items: [{ id: calendarId }],
+    },
+  });
+
+  return response.data.calendars?.[calendarId].busy;
+};
 
 export async function deleteEvent(eventId: string) {
   const auth = getOAuthClient();
