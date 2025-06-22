@@ -1,13 +1,18 @@
 import { calendar_v3 } from "googleapis";
 import Calendar = calendar_v3.Schema$FreeBusyCalendar
 
-
-// Function to check if a new event conflicts with busy periods (single calendar)
+// TODO: Function could be replaced with openAI function that checks availability 
+// This function checks if a new event can be scheduled without conflicting with existing busy periods in a calendar.
 export function isEventAvailable(busy: NonNullable<Calendar["busy"]>, newEventStart: Date, newEventEnd: Date): boolean {
   const eventStart = new Date(newEventStart);
   const eventEnd = new Date(newEventEnd);
   
   for (const busyPeriod of busy) {
+    if (!busyPeriod.start || !busyPeriod.end) {
+      console.warn("Busy period missing start or end time:", busyPeriod);
+      continue; 
+    }
+
     const busyStart = new Date(busyPeriod.start);
     const busyEnd = new Date(busyPeriod.end);
     
@@ -20,6 +25,7 @@ export function isEventAvailable(busy: NonNullable<Calendar["busy"]>, newEventSt
   return true; // No conflicts found  
 }
 
+// TODO: Did not seem to work with longer busy periods, so we need to check the start and end of the new event against each busy period
 // Helper function to check if two time periods overlap
 function eventsOverlap(start1, end1, start2, end2) {
   // Two events overlap if:

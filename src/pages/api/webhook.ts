@@ -115,6 +115,9 @@ export default async function handler(
                 cleanMessage.from,
                 `The requested time is not available. Here are 3 alternative times you can book: ${suggestedTimes}. Please reply with one of these times to confirm your appointment or provide a new date and time.`
               );
+
+              // TODO: Store the suggested times in a session or database for later confirmation
+              // This is important to handle the confirmation in a follow-up message
               return res.status(200).end();
             };
             return res.status(200).end();

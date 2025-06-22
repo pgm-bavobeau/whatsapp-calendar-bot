@@ -20,7 +20,7 @@ export async function generateReplyFromOpenAI(message: string): Promise<string> 
                     {
                       "intent": "book" | "reschedule" | "cancel" | "smalltalk" | "unknown",
                       "datetime": "2025-06-25T15:00:00", // ISO 8601, optional
-                      "summary": "Physio appointment with John Doe", // optional
+                      "summary": "Physio appointment with John Doe", // optional but recommended
                       "reply": "Your appointment is booked!" // human-friendly message
                     }
                             
