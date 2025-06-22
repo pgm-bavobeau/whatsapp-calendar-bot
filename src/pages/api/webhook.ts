@@ -7,7 +7,7 @@ import {
   listUpcomingEvents,
   deleteEvent,
   updateEventTime,
-} from "@/lib/google";
+} from "@/services/google";
 
 const VERIFY_TOKEN = process.env.WHATSAPP_VERIFY_TOKEN;
 
@@ -66,13 +66,18 @@ export default async function handler(
         case "book":
           if (structured.datetime) {
             const startDate = new Date(structured.datetime);
+            if (isNaN(startDate.getTime())) {
+              await sendWhatsAppTextMessage(
+                cleanMessage.from,
+                "Ongeldige datum/tijd. Probeer het opnieuw."
+              );
+              return res.status(200).end();
+            }
             const endDate = new Date(startDate.getTime() + 30 * 60 * 1000); // 30 minutes later
 
             const event = await createCalendarEvent({
               summary: structured.summary || "Afspraak via whatsapp",
-              description:
-                structured.description ||
-                "Automatisch geboekte afspraak via de bot",
+              phoneNumber: cleanMessage.from,
               startDateTime: startDate.toISOString(),
               endDateTime: endDate.toISOString(),
             });
