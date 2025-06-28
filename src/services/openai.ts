@@ -1,8 +1,7 @@
-import { log } from "console";
-
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY!;
 
 export async function generateReplyFromOpenAI(message: string): Promise<string> {
+  const today = new Date().toISOString().split('T')[0];
   const res = await fetch('https://api.openai.com/v1/chat/completions', {
     method: 'POST',
     headers: {
@@ -14,16 +13,17 @@ export async function generateReplyFromOpenAI(message: string): Promise<string> 
       messages: [
         {
           role: 'system',
-          content: `You are a scheduling assistant. 
+          content: `You are a scheduling assistant. the current date is ${today}.
+                    Your task is to understand user messages about booking, rescheduling, or canceling appointments and respond in a specific JSON format.  
                     When a user messages you, respond only in this JSON format:
 
                     {
-                      "intent": "book" | "reschedule" | "cancel" | "smalltalk" | "unknown",
+                      "intent": "book" | "reschedule" | "cancel" | "unknown",
                       "datetime": "2025-06-25T15:00:00", // ISO 8601, optional
                       "summary": "Physio appointment with John Doe", // optional but recommended
                       "reply": "Your appointment is booked!" // human-friendly message
                     }
-                            
+
                     Always include the 'intent' and 'reply'. Include 'datetime' and 'summary' only if intent is book/reschedule.`,
         },
         {
